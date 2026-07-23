@@ -2,7 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
 from app.api.v1.router import api_router
@@ -44,5 +44,5 @@ _frontend = Path(__file__).resolve().parents[1] / "frontend" / "index.html"
 @app.get("/", include_in_schema=False)
 async def serve_frontend():
     if not _frontend.exists():
-        raise FileNotFoundError
+        raise HTTPException(status_code=404, detail="Frontend not found")
     return FileResponse(path=_frontend, media_type="text/html")
