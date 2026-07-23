@@ -2,7 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.responses import FileResponse
 
 from app.api.v1.router import api_router
@@ -20,36 +20,29 @@ async def lifespan(app: FastAPI):
 
     for dir_path in [settings.log_path, settings.download_path]:
         dir_path.mkdir(parents=True, exist_ok=True)
-        logger.debug("Ensured directory: %s", dir_path)
 
-    logger.info("Startup complete")
     yield
     logger.info("Shutting down %s", settings.app_name)
 
 
-def create_app() -> FastAPI:
-    app = FastAPI(
-        title=settings.app_name,
-        version=settings.app_version,
-        description="Service for downloading a text-file catalog from an external API with statistics.",
-        docs_url="/docs",
-        redoc_url="/redoc",
-        lifespan=lifespan,
-    )
+app = FastAPI(
+    title=settings.app_name,
+    version=settings.app_version,
+    description="Service for downloading a text-file catalog from an external API with statistics.",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan,
+)
 
-    setup_cors(app)
-    register_exception_handlers(app)
-    app.include_router(api_router)
+setup_cors(app)
+register_exception_handlers(app)
+app.include_router(api_router)
 
-    frontend_path = Path(__file__).resolve().parents[1] / "frontend" / "index.html"
-
-    @app.get("/", include_in_schema=False)
-    async def serve_frontend():
-        if not frontend_path.exists():
-            raise HTTPException(status_code=404, detail="Frontend not found")
-        return FileResponse(path=frontend_path, media_type="text/html")
-
-    return app
+_frontend = Path(__file__).resolve().parents[1] / "frontend" / "index.html"
 
 
-app = create_app()
+@app.get("/", include_in_schema=False)
+async def serve_frontend():
+    if not _frontend.exists():
+        raise FileNotFoundError
+    return FileResponse(path=_frontend, media_type="text/html")
