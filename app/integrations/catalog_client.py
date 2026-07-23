@@ -28,7 +28,6 @@ class DownloadState:
 
 class CatalogClient:
     def __init__(self, state: DownloadState) -> None:
-        self.base_url = settings.api_base_url.rstrip("/")
         self._headers = {"X-Candidate-Id": settings.candidate_id}
         self._state = state
         self._semaphore = asyncio.Semaphore(3)
@@ -64,7 +63,7 @@ class CatalogClient:
         json: Optional[dict] = None,
         expect_json: bool = True,
     ):
-        url = f"{self.base_url}{path}"
+        url = f"http://localhost:{settings.port}{path}"
         self._state.requests_made += 1
 
         while True:
@@ -79,13 +78,20 @@ class CatalogClient:
                         logger.debug("%s %s — 200", method, path)
                         return resp.json() if expect_json else resp.content
 
-                    if resp.status_code in (429, 403):
+                    if resp.status_code == 429:
                         retry_after = self._parse_retry_after(resp.headers.get("Retry-After", "5"))
                         self._state.status = "retrying"
-                        self._state.error_message = f"{resp.status_code}, жду {retry_after}с"
+                        self._state.error_message = f"429, жду {retry_after}с"
                         logger.warning("Лимит API, жду %sс", retry_after)
                         await asyncio.sleep(retry_after)
                         continue
+
+                    if resp.status_code == 403:
+                        self._state.status = "error"
+                        self._state.error_message = "403 Forbidden — доступ запрещён. Проверьте X-Candidate-Id."
+                        self._state.errors += 1
+                        logger.error("403 Forbidden на %s — доступ запрещён", path)
+                        resp.raise_for_status()
 
                     if resp.status_code == 404:
                         logger.warning("404 на %s", path)

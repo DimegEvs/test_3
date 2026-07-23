@@ -19,7 +19,6 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:8000"
 
-    api_base_url: str = "http://91.199.149.128:18001"
     candidate_id: str = "my-candidate"
 
     download_dir: str = "downloaded"

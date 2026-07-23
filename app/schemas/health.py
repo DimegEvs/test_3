@@ -9,4 +9,4 @@ class HealthResponse(BaseModel):
 
 class DownloadStartResponse(BaseModel):
     started: bool
-    message: str | None = None
+    message: str = ""

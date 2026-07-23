@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Request
+from fastapi import APIRouter, BackgroundTasks
 
 from app.handlers.download_handler import DownloadHandler
 from app.schemas.health import DownloadStartResponse

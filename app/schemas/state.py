@@ -13,11 +13,11 @@ class StatsModel(BaseModel):
 
 
 class StateResponse(BaseModel):
-    status: str
-    total_attempted: int
-    total_downloaded: int
-    total_marked: int
-    requests_made: int
-    errors: int
-    error_message: str
+    status: str = "idle"
+    total_attempted: int = 0
+    total_downloaded: int = 0
+    total_marked: int = 0
+    requests_made: int = 0
+    errors: int = 0
+    error_message: str = ""
     stats: StatsModel | None = None
