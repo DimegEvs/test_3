@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Каталог-загрузчик</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --dim: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --orange: #d2991d;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font:14px/1.5 -apple-system,BlinkMacSystemFont,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  .container { max-width:820px; margin:0 auto; padding:40px 20px; }
+  h1 { font-size:22px; font-weight:600; margin-bottom:28px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:20px; margin-bottom:16px; }
+  .card h2 { font-size:15px; font-weight:500; margin-bottom:14px; color:var(--dim); text-transform:uppercase; letter-spacing:.5px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }
+  .stat { }
+  .stat-label { font-size:11px; color:var(--dim); text-transform:uppercase; }
+  .stat-value { font-size:20px; font-weight:600; }
+  button {
+    background:var(--accent); color:#fff; border:none; padding:10px 24px; border-radius:6px;
+    font-size:14px; font-weight:500; cursor:pointer; transition:opacity .15s;
+  }
+  button:hover { opacity:.85; }
+  button:disabled { opacity:.4; cursor:default; }
+  .status-badge {
+    display:inline-block; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:500;
+  }
+  .status-idle { background:var(--border); color:var(--dim); }
+  .status-running { background:#1f2a36; color:var(--accent); }
+  .status-done { background:#1a2e1a; color:var(--green); }
+  .status-error, .status-retrying { background:#3a1a1a; color:var(--red); }
+  .err-msg { color:var(--red); font-size:13px; margin-top:6px; }
+  .top-words { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .top-word { background:var(--border); padding:2px 8px; border-radius:4px; font-size:12px; }
+  .top-word-count { color:var(--dim); }
+  .bar { height:4px; border-radius:2px; background:var(--border); margin-top:16px; overflow:hidden; }
+  .bar-fill { height:100%; background:var(--accent); transition:width .3s; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Каталог-загрузчик</h1>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;">Статус</h2>
+      <span id="badge" class="status-badge status-idle">ожидание</span>
+    </div>
+    <button id="btn" onclick="start()">Скачать весь каталог</button>
+    <div id="err" class="err-msg"></div>
+    <div class="bar"><div id="progress" class="bar-fill" style="width:0"></div></div>
+  </div>
+
+  <div class="card">
+    <h2>Ход загрузки</h2>
+    <div class="grid">
+      <div class="stat"><div class="stat-label">Запросов</div><div id="s-requests" class="stat-value">0</div></div>
+      <div class="stat"><div class="stat-label">Попыток имён</div><div id="s-attempted" class="stat-value">0</div></div>
+      <div class="stat"><div class="stat-label">Скачано</div><div id="s-downloaded" class="stat-value">0</div></div>
+      <div class="stat"><div class="stat-label">Отмечено</div><div id="s-marked" class="stat-value">0</div></div>
+      <div class="stat"><div class="stat-label">Ошибок</div><div id="s-errors" class="stat-value">0</div></div>
+    </div>
+  </div>
+
+  <div id="stats-card" class="card" style="display:none;">
+    <h2>Статистика содержимого</h2>
+    <div class="grid">
+      <div class="stat"><div class="stat-label">Файлов</div><div id="st-files" class="stat-value">0</div></div>
+      <div class="stat"><div class="stat-label">Символов</div><div id="st-chars" class="stat-value">0</div></div>
+      <div class="stat"><div class="stat-label">Строк</div><div id="st-lines" class="stat-value">0</div></div>
+      <div class="stat"><div class="stat-label">Слов (всего)</div><div id="st-words" class="stat-value">0</div></div>
+      <div class="stat"><div class="stat-label">Уникальных слов</div><div id="st-unique" class="stat-value">0</div></div>
+    </div>
+    <div style="margin-top:14px;">
+      <div class="stat-label">Топ-20 слов</div>
+      <div id="st-top" class="top-words"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const btn = document.getElementById("btn");
+const badge = document.getElementById("badge");
+const errEl = document.getElementById("err");
+const progressEl = document.getElementById("progress");
+
+function fmt(n) { return n != null ? n.toLocaleString() : "0"; }
+
+async function refresh() {
+  const r = await fetch("/api/state");
+  const d = await r.json();
+
+  const statusMap = {
+    idle: ["status-idle","ожидание"],
+    running: ["status-running","загрузка…"],
+    done: ["status-done","завершено"],
+    retrying: ["status-retrying","пауза (лимит)"],
+    error: ["status-error","ошибка"],
+  };
+  const [cls,label] = statusMap[d.status] || ["status-idle",d.status];
+  badge.className = "status-badge " + cls;
+  badge.textContent = label;
+
+  btn.disabled = d.status === "running" || d.status === "retrying";
+  if (d.status === "done") btn.textContent = "Скачать заново";
+  else if (d.status === "running" || d.status === "retrying") btn.textContent = "Идёт загрузка…";
+  else btn.textContent = "Скачать весь каталог";
+
+  errEl.textContent = d.error_message || "";
+
+  progressEl.style.width = d.stats && d.stats.total_files > 0 ? "100%" : "0";
+
+  document.getElementById("s-requests").textContent = fmt(d.requests_made);
+  document.getElementById("s-attempted").textContent = fmt(d.total_attempted);
+  document.getElementById("s-downloaded").textContent = fmt(d.total_downloaded);
+  document.getElementById("s-marked").textContent = fmt(d.total_marked);
+  document.getElementById("s-errors").textContent = fmt(d.errors);
+
+  if (d.stats && d.stats.total_files > 0) {
+    document.getElementById("stats-card").style.display = "";
+    document.getElementById("st-files").textContent = fmt(d.stats.total_files);
+    document.getElementById("st-chars").textContent = fmt(d.stats.total_chars);
+    document.getElementById("st-lines").textContent = fmt(d.stats.total_lines);
+    document.getElementById("st-words").textContent = fmt(d.stats.total_words);
+    document.getElementById("st-unique").textContent = fmt(d.stats.unique_words);
+
+    const top = document.getElementById("st-top");
+    top.innerHTML = d.stats.top_words.map(([w,c]) =>
+      `<span class="top-word">${w} <span class="top-word-count">(${c})</span></span>`
+    ).join("");
+  }
+}
+
+async function start() {
+  await fetch("/api/download-all", { method:"POST" });
+  errEl.textContent = "";
+}
+
+refresh();
+setInterval(refresh, 1500);
+</script>
+</body>
+</html>
