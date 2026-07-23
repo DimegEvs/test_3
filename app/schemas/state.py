@@ -1,13 +1,15 @@
 from pydantic import BaseModel, Field
 
 
+class FileDigitStats(BaseModel):
+    file_name: str
+    digit_counts: dict[str, int]
+
+
 class StatsModel(BaseModel):
     total_files: int = 0
-    total_chars: int = 0
-    total_lines: int = 0
-    total_words: int = 0
-    unique_words: int = 0
-    top_words: list[tuple[str, int]] = Field(default_factory=list)
+    digit_counts: dict[str, int] = Field(default_factory=dict)
+    file_stats: list[FileDigitStats] = Field(default_factory=list)
 
 
 class StateResponse(BaseModel):

@@ -3,9 +3,11 @@ from collections import Counter
 from pathlib import Path
 
 from app.config import settings
-from app.schemas.state import StatsModel
+from app.schemas.state import FileDigitStats, StatsModel
 
 logger = logging.getLogger(__name__)
+
+DIGITS = {str(d): 0 for d in range(10)}
 
 
 class StatsService:
@@ -15,9 +17,8 @@ class StatsService:
             download_dir = settings.download_path
         files = list(download_dir.glob("*.txt"))
 
-        total_chars = 0
-        total_lines = 0
-        word_counter: Counter = Counter()
+        overall_counter: Counter = Counter()
+        file_stats: list[FileDigitStats] = []
 
         for fp in files:
             try:
@@ -26,20 +27,21 @@ class StatsService:
                 logger.warning("Не удалось прочитать %s, пропуск", fp.name)
                 continue
 
-            total_chars += len(text)
-            total_lines += text.count("\n") + (1 if text and not text.endswith("\n") else 0)
-            words = text.split()
-            word_counter.update(words)
+            file_digits = DIGITS.copy()
+            for ch in text:
+                if ch.isdigit():
+                    overall_counter[ch] += 1
+                    file_digits[ch] += 1
 
-        total_words = sum(word_counter.values())
-        unique_words = len(word_counter)
-        top_words = word_counter.most_common(20)
+            file_stats.append(FileDigitStats(
+                file_name=fp.name,
+                digit_counts=dict(file_digits),
+            ))
+
+        digit_counts = {d: overall_counter.get(d, 0) for d in DIGITS}
 
         return StatsModel(
             total_files=len(files),
-            total_chars=total_chars,
-            total_lines=total_lines,
-            total_words=total_words,
-            unique_words=unique_words,
-            top_words=top_words,
+            digit_counts=digit_counts,
+            file_stats=file_stats,
         )
